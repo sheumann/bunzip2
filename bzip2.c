@@ -3,6 +3,11 @@
 /*--- A block-sorting, lossless compressor        bzip2.c ---*/
 /*-----------------------------------------------------------*/
 
+/*-- Modified for use under GNO by Stephen Heumann --*/
+#ifdef __ORCAC__
+segment "bzip2";
+#endif
+
 /*--
   This file is a part of bzip2 and/or libbzip2, a program and
   library for lossless, block-sorting data compression.
@@ -148,6 +153,14 @@
 #include <ctype.h>
 #include "bzlib.h"
 
+#ifdef __appleiigs__
+#include <gsos.h>
+char *stristr(const char *, const char *);
+#if defined(__GNO__) && defined(__STACK_CHECK__)
+#include  <gno/gno.h>
+#endif
+#endif
+
 #define ERROR_IF_EOF(i)       { if ((i) == EOF)  ioError(); }
 #define ERROR_IF_NOT_ZERO(i)  { if ((i) != 0)    ioError(); }
 #define ERROR_IF_MINUS_ONE(i) { if ((i) == (-1)) ioError(); }
@@ -213,6 +226,11 @@
            ERROR_IF_MINUS_ONE ( retVal );               \
         } while ( 0 )
 #   endif
+
+#   ifdef __GNO__
+#     undef SET_BINARY_MODE
+#     define SET_BINARY_MODE(fd)	fsetbinary(fd);
+#   endif
 #endif /* BZ_UNIX */
 
 
@@ -220,7 +238,10 @@
 #if BZ_LCCWIN32
 #   include <io.h>
 #   include <fcntl.h>
-#   include <sys\stat.h>
+/* This was "#include <sys\stat.h>", but ORCA/C complains
+   about an invalid character, so I changed it.  This 
+   might possibly break compilation on Win 32 systems. */
+#   include <sys/stat.h>
 
 #   define NORETURN       /**/
 #   define PATH_SEP       '\\'
@@ -253,8 +274,15 @@
 typedef char            Char;
 typedef unsigned char   Bool;
 typedef unsigned char   UChar;
+#ifdef __ORCAC__
+typedef long            Int32;
+typedef unsigned long   UInt32;
+#  define Int32_FMT "%ld"
+#else
 typedef int             Int32;
 typedef unsigned int    UInt32;
+#  define Int32_FMT "%d"
+#endif /* defined __ORCAC__ */
 typedef short           Int16;
 typedef unsigned short  UInt16;
                                        
@@ -386,7 +414,11 @@ static
 void uInt64_toAscii ( char* outbuf, UInt64* n )
 {
    Int32  i, q;
+#ifdef __ORCAC__
+   static UChar buf[32];
+#else
    UChar  buf[32];
+#endif
    Int32  nBuf   = 0;
    UInt64 n_copy = *n;
    do {
@@ -416,15 +448,24 @@ Bool myfeof ( FILE* f )
 
 
 /*---------------------------------------------*/
+#ifndef __ORCAC__
 static 
 void compressStream ( FILE *stream, FILE *zStream )
 {
    BZFILE* bzf = NULL;
+#ifdef __ORCAC__
+   static UChar ibuf[5000];
+#else
    UChar   ibuf[5000];
+#endif
    Int32   nIbuf;
    UInt32  nbytes_in_lo32, nbytes_in_hi32;
    UInt32  nbytes_out_lo32, nbytes_out_hi32;
+#ifdef __ORCAC__
+   Int16   bzerr, bzerr_dummy, ret;
+#else
    Int32   bzerr, bzerr_dummy, ret;
+#endif
 
    SET_BINARY_MODE(stream);
    SET_BINARY_MODE(zStream);
@@ -513,6 +554,7 @@ void compressStream ( FILE *stream, FILE *zStream )
    panic ( "compress:end" );
    /*notreached*/
 }
+#endif
 
 
 
@@ -521,10 +563,18 @@ static
 Bool uncompressStream ( FILE *zStream, FILE *stream )
 {
    BZFILE* bzf = NULL;
+#ifdef __ORCAC__
+   Int16   bzerr, bzerr_dummy;
+   Int32   ret, nread, streamNo, i;
+   static UChar   obuf[5000];
+   static UChar   unused[BZ_MAX_UNUSED];
+   Int16          nUnused;
+#else
    Int32   bzerr, bzerr_dummy, ret, nread, streamNo, i;
    UChar   obuf[5000];
    UChar   unused[BZ_MAX_UNUSED];
    Int32   nUnused;
+#endif
    UChar*  unusedTmp;
 
    nUnused = 0;
@@ -635,10 +685,18 @@ static
 Bool testStream ( FILE *zStream )
 {
    BZFILE* bzf = NULL;
+#ifdef __ORCAC__
+   Int16        bzerr, bzerr_dummy, ret;
+   Int32        nread, streamNo, i;
+   static UChar obuf[5000];
+   static UChar unused[BZ_MAX_UNUSED];
+   Int16        nUnused;
+#else
    Int32   bzerr, bzerr_dummy, ret, nread, streamNo, i;
    UChar   obuf[5000];
    UChar   unused[BZ_MAX_UNUSED];
    Int32   nUnused;
+#endif
    UChar*  unusedTmp;
 
    nUnused = 0;
@@ -802,7 +860,11 @@ void cleanUpAndFail ( Int32 ec )
                    "%s:    `%s' may be incomplete.\n",
                    progName, outName );
          fprintf ( stderr, 
+#ifndef __GNO__
                    "%s:    I suggest doing an integrity test (bzip2 -tv)"
+#else
+                   "%s:    I suggest doing an integrity test (bunzip2 -tv)"
+#endif
                    " of it.\n",
                    progName );
       }
@@ -811,7 +873,7 @@ void cleanUpAndFail ( Int32 ec )
    if (noisy && numFileNames > 0 && numFilesProcessed < numFileNames) {
       fprintf ( stderr, 
                 "%s: WARNING: some files have not been processed:\n"
-                "%s:    %d specified on command line, %d not processed yet.\n\n",
+                "%s:    " Int32_FMT " specified on command line, " Int32_FMT " not processed yet.\n\n",
                 progName, progName,
                 numFileNames, numFileNames - numFilesProcessed );
    }
@@ -827,8 +889,16 @@ void panic ( Char* s )
    fprintf ( stderr,
              "\n%s: PANIC -- internal consistency error:\n"
              "\t%s\n"
+#ifndef __GNO__
              "\tThis is a BUG.  Please report it to me at:\n"
              "\tjseward@acm.org\n",
+#else
+             "\tThis is a BUG.  If you are experiencing it only in\n"
+             "the GNO version of bunzip2, please report it to me at\n"
+             "sheumann@myrealbox.com .  If you can duplicate it in\n"
+             "other versions of bzip2 as well, please report it to\n"
+             "the original author Julian Seward at tjseward@acm.org\n",
+#endif
              progName, s );
    showFileNames();
    cleanUpAndFail( 3 );
@@ -880,6 +950,10 @@ void ioError ( void )
 
 
 /*---------------------------------------------*/
+#ifdef __ORCAC__
+#pragma databank 1
+#endif
+
 static 
 void mySignalCatcher ( IntNative n )
 {
@@ -889,11 +963,14 @@ void mySignalCatcher ( IntNative n )
    cleanUpAndFail(1);
 }
 
-
+/* This function should never be called on a normal GNO system,
+   but it doesn't hurt to leave it in. */
 /*---------------------------------------------*/
 static 
 void mySIGSEGVorSIGBUScatcher ( IntNative n )
 {
+#ifndef __ORCAC__
+/* Not needed for decompression */
    if (opMode == OM_Z)
       fprintf ( 
       stderr,
@@ -915,7 +992,10 @@ void mySIGSEGVorSIGBUScatcher ( IntNative n )
       "   have the manual or can't be bothered to read it, mail me anyway.\n"
       "\n",
       progName );
-      else
+   else
+#else
+   if (opMode != OM_Z)
+#endif
       fprintf ( 
       stderr,
       "\n%s: Caught a SIGSEGV or SIGBUS whilst decompressing.\n"
@@ -944,6 +1024,10 @@ void mySIGSEGVorSIGBUScatcher ( IntNative n )
       cleanUpAndFail( 3 ); else
       { cadvise(); cleanUpAndFail( 2 ); }
 }
+
+#ifdef __ORCAC__
+#pragma databank 0
+#endif
 
 
 /*---------------------------------------------*/
@@ -1000,10 +1084,10 @@ void copyFileName ( Char* to, Char* from )
    if ( strlen(from) > FILE_NAME_LEN-10 )  {
       fprintf (
          stderr,
-         "bzip2: file name\n`%s'\n"
+         "%s: file name\n`%s'\n"
          "is suspiciously (more than %d chars) long.\n"
          "Try using a reasonable file name instead.  Sorry! :-)\n",
-         from, FILE_NAME_LEN-10
+         progName, from, FILE_NAME_LEN-10
       );
       setExit(1);
       exit(exitValue);
@@ -1137,13 +1221,43 @@ void applySavedMetaInfoToOutputFile ( Char *dstName )
    retVal = chmod ( dstName, fileMetaInfo.st_mode );
    ERROR_IF_NOT_ZERO ( retVal );
 
+#ifndef __ORCAC__
+   /* ORCA/C's localtime(), which is called by utime(), is broken.
+    * We fix this by simply disabling time setting, as bzip2 does
+	* on non-Unix platforms anyway.  A better solution would be
+	* to fix or replace utime() and/or localtime().
+	*/
    retVal = utime ( dstName, &uTimBuf );
    ERROR_IF_NOT_ZERO ( retVal );
+#endif
 
+#ifdef __appleiigs__
+   /* Set filetype to BIN if running on the GS */
+   {
+	  static GSString255 fileNameStringGS;
+	  static FileInfoRecGS infoRec = { 4, /* pCount */
+		                               &fileNameStringGS, /* Ptr to file name */
+									   0x00C3, /* access restrictions (none) */
+									   0x06, /* filetype (BIN) */
+									   0x0000 /* auxtype ($0000) */
+									   };
+		
+      if (strlen( dstName ) <= 255) {
+		  strncpy( fileNameStringGS.text, dstName, 255 );
+	      fileNameStringGS.length = strlen( dstName );
+		  SetFileInfo( &infoRec );
+		  /* Ignore any errors produced by this call, leaving the file's
+		     existing filetype intact.  This parallels the approach taken 
+		     when setting file attributes on Unix.
+		  */
+	  }
+    }
+#else
    retVal = chown ( dstName, fileMetaInfo.st_uid, fileMetaInfo.st_gid );
    /* chown() will in many cases return with EPERM, which can
       be safely ignored.
    */
+#endif /* defined __GNO__ */
 #  endif
 }
 
@@ -1181,8 +1295,14 @@ Bool hasSuffix ( Char* s, Char* suffix )
 {
    Int32 ns = strlen(s);
    Int32 nx = strlen(suffix);
-   if (ns < nx) return False;
+    if (ns < nx) return False;
+#ifndef __appleiigs__
    if (strcmp(s + ns - nx, suffix) == 0) return True;
+#else
+   /* Filenames are case-insensitive on the GS,
+      so use a case-insensitive compare for them */
+   if (strcasecmp(s + ns - nx, suffix) == 0) return True;
+#endif
    return False;
 }
 
@@ -1198,6 +1318,7 @@ Bool mapSuffix ( Char* name,
 
 
 /*---------------------------------------------*/
+#ifndef __ORCAC__
 static 
 void compress ( Char *name )
 {
@@ -1279,7 +1400,7 @@ void compress ( Char *name )
    }
    if ( srcMode == SM_F2F && !forceOverwrite &&
         (n=countHardLinks ( inName )) > 0) {
-      fprintf ( stderr, "%s: Input file %s has %d other link%s.\n",
+      fprintf ( stderr, "%s: Input file %s has " Int32_FMT " other link%s.\n",
                 progName, inName, n, n > 1 ? "s" : "" );
       setExit(1);
       return;
@@ -1376,6 +1497,7 @@ void compress ( Char *name )
 
    deleteOutputOnInterrupt = False;
 }
+#endif
 
 
 /*---------------------------------------------*/
@@ -1465,7 +1587,7 @@ void uncompress ( Char *name )
    }
    if ( srcMode == SM_F2F && !forceOverwrite &&
         (n=countHardLinks ( inName ) ) > 0) {
-      fprintf ( stderr, "%s: Input file %s has %d other link%s.\n",
+      fprintf ( stderr, "%s: Input file %s has " Int32_FMT " other link%s.\n",
                 progName, inName, n, n > 1 ? "s" : "" );
       setExit(1);
       return;
@@ -1671,7 +1793,11 @@ void license ( void )
 {
    fprintf ( stderr,
 
+#ifndef __ORCAC__
     "bzip2, a block-sorting file compressor.  "
+#else
+    "bunzip2, a block-sorting file decompressor.  "
+#endif
     "Version %s.\n"
     "   \n"
     "   Copyright (C) 1996-2002 by Julian Seward.\n"
@@ -1684,6 +1810,14 @@ void license ( void )
     "   but WITHOUT ANY WARRANTY; without even the implied warranty of\n"
     "   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\n"
     "   LICENSE file for more details.\n"
+#ifdef __ORCAC__
+    "   \n"
+    "   This version of bunzip2 for GNO is based on Julian Seward's bzip2\n"
+    "   program for other platforms, with modifications by Stephen Heumann.\n"
+    "   \n"
+    "   This program contains material from the ORCA/C Run-Time Libraries,\n"
+    "   copyright 1987-1996 by Byte Works, Inc.  Used with permission.\n"
+#endif
     "   \n",
     BZ2_bzlibVersion()
    );
@@ -1696,13 +1830,19 @@ void usage ( Char *fullProgName )
 {
    fprintf (
       stderr,
+#ifndef __ORCAC__
       "bzip2, a block-sorting file compressor.  "
+#else
+      "bunzip2, a block-sorting file decompressor.  "
+#endif
       "Version %s.\n"
       "\n   usage: %s [flags and input files in any order]\n"
       "\n"
       "   -h --help           print this message\n"
       "   -d --decompress     force decompression\n"
+#ifndef __ORCAC__
       "   -z --compress       force compression\n"
+#endif
       "   -k --keep           keep (don't delete) input files\n"
       "   -f --force          overwrite existing output files\n"
       "   -t --test           test compressed file integrity\n"
@@ -1712,17 +1852,33 @@ void usage ( Char *fullProgName )
       "   -L --license        display software version & license\n"
       "   -V --version        display software version & license\n"
       "   -s --small          use less memory (at most 2500k)\n"
+#ifndef __ORCAC__
       "   -1 .. -9            set block size to 100k .. 900k\n"
       "   --fast              alias for -1\n"
       "   --best              alias for -9\n"
+#endif
       "\n"
+#ifndef __ORCAC__
       "   If invoked as `bzip2', default action is to compress.\n"
       "              as `bunzip2',  default action is to decompress.\n"
+#else
+      "   If invoked as 'bunzip2', default action is to decompress.\n"
+#endif
       "              as `bzcat', default action is to decompress to stdout.\n"
       "\n"
+#ifndef __ORCAC__
       "   If no file names are given, bzip2 compresses or decompresses\n"
       "   from standard input to standard output.  You can combine\n"
       "   short flags, so `-v -4' means the same as -v4 or -4v, &c.\n"
+#else
+      "   If no file names are given, bunzip2 decompresses from standard\n"
+      "   input to standard output.  You can combine short flags, so\n"
+      "   `-v -4' means the same as -v4 or -4v, &c.\n"
+      "\n"
+      "   This version of bunzip2 for GNO is based on the bzip2 program for\n"
+	  "   other platforms; however, it has all compression functionality\n"
+	  "   disabled and will only decompress or test compressed files.\n"
+#endif
 #     if BZ_UNIX
       "\n"
 #     endif
@@ -1794,6 +1950,10 @@ Cell *mkCell ( void )
 
 
 /*---------------------------------------------*/
+#ifdef __ORCAC__
+#pragma optimize 119
+#endif
+
 static 
 Cell *snocString ( Cell *root, Char *name )
 {
@@ -1809,6 +1969,10 @@ Cell *snocString ( Cell *root, Char *name )
       return root;
    }
 }
+
+#ifdef __ORCAC__
+#pragma optimize -1
+#endif
 
 
 /*---------------------------------------------*/
@@ -1849,6 +2013,11 @@ IntNative main ( IntNative argc, Char *argv[] )
    Cell   *argList;
    Cell   *aa;
    Bool   decode;
+
+#if defined(__GNO__) && defined(__STACK_CHECK__)
+   __REPORT_STACK();
+   fprintf(stderr, "Stack checking on\n");
+#endif
 
    /*-- Be really really really paranoid :-) --*/
    if (sizeof(Int32) != 4 || sizeof(UInt32) != 4  ||
@@ -1920,6 +2089,7 @@ IntNative main ( IntNative argc, Char *argv[] )
 
    /*-- Determine what to do (compress/uncompress/test/cat). --*/
    /*-- Note that subsequent flag handling may change this. --*/
+#ifndef __ORCAC__
    opMode = OM_Z;
 
    if ( (strstr ( progName, "unzip" ) != 0) ||
@@ -1934,6 +2104,23 @@ IntNative main ( IntNative argc, Char *argv[] )
       srcMode = (numFileNames == 0) ? SM_I2O : SM_F2O;
    }
 
+#else
+   /* GNO modifications: Decompress by default, and use case-insensitive
+      compares for filenames, in keeping with the normal practice on the GS */
+   opMode = OM_UNZ;
+   
+   if (stristr ( progName, "bzip" ) != 0)
+   	opMode = OM_Z;
+
+   if (stristr ( progName, "unzip" ) != 0)
+	opMode = OM_UNZ;
+
+   if ( (stristr ( progName, "z2cat" ) != 0) ||
+        (stristr ( progName, "zcat" ) != 0) ) {
+      opMode = OM_UNZ;
+      srcMode = (numFileNames == 0) ? SM_I2O : SM_F2O;
+   }
+#endif
 
    /*-- Look at the flags. --*/
    for (aa = argList; aa != NULL; aa = aa->link) {
@@ -2026,6 +2213,7 @@ IntNative main ( IntNative argc, Char *argv[] )
    }
 
    if (opMode == OM_Z) {
+#ifndef __ORCAC__
      if (srcMode == SM_I2O) {
         compress ( NULL );
      } else {
@@ -2037,6 +2225,13 @@ IntNative main ( IntNative argc, Char *argv[] )
            compress ( aa->name );
         }
      }
+#else
+   fprintf ( stderr,
+             "%s: Cannot compress data.  The GNO version of bunzip2 does\n"
+             "%s: not support compression, only decompression and testing.\n",
+             progName, progName );
+   cleanUpAndFail( 4 );
+#endif
    } 
    else
 

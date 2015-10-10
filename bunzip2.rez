@@ -1,0 +1,15 @@
+#include "/lang/orca/libraries/rinclude/Types.Rez"
+
+resource rVersion (0x1, purgeable3, nocrossbank) {
+
+	{ 1, 0, 2,	/* version 1.0.2 */
+	  release,	/* development|alpha|beta|final|release */
+          0		/* non-final release number */
+        },
+        verUS,		/* country code -- only some are avail */
+        "bunzip2",	/* name */
+			/* _Very_ brief descrition.  Check "file info" */
+			/* shown in the Finder to see if it's too long */
+			/* Note that \n is used to separate lines here. */
+	"Bzip2 archive decompression program\n"
+};

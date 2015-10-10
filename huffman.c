@@ -4,6 +4,11 @@
 /*---                                             huffman.c ---*/
 /*-------------------------------------------------------------*/
 
+/*-- Modified for use under GNO by Stephen Heumann --*/
+#ifdef __ORCAC__
+segment "bzip2";
+#endif
+
 /*--
   This file is a part of bzip2 and/or libbzip2, a program and
   library for lossless, block-sorting data compression.
@@ -112,9 +117,15 @@ void BZ2_hbMakeCodeLengths ( UChar *len,
    Int32 nNodes, nHeap, n1, n2, i, j, k;
    Bool  tooLong;
 
+#ifdef __ORCAC__
+   static Int32 heap   [ BZ_MAX_ALPHA_SIZE + 2 ];
+   static Int32 weight [ BZ_MAX_ALPHA_SIZE * 2 ];
+   static Int32 parent [ BZ_MAX_ALPHA_SIZE * 2 ]; 
+#else
    Int32 heap   [ BZ_MAX_ALPHA_SIZE + 2 ];
    Int32 weight [ BZ_MAX_ALPHA_SIZE * 2 ];
    Int32 parent [ BZ_MAX_ALPHA_SIZE * 2 ]; 
+#endif
 
    for (i = 0; i < alphaSize; i++)
       weight[i+1] = (freq[i] == 0 ? 1 : freq[i]) << 8;

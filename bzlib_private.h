@@ -4,6 +4,8 @@
 /*---                                       bzlib_private.h ---*/
 /*-------------------------------------------------------------*/
 
+/*-- Modified for use under GNO by Stephen Heumann --*/
+
 /*--
   This file is a part of bzip2 and/or libbzip2, a program and
   library for lossless, block-sorting data compression.
@@ -76,13 +78,30 @@
 
 /*-- General stuff. --*/
 
+#ifdef __GNO__
+#define BZ_VERSION  "1.0.2gs1, 07-Jun-2003"
+#else
 #define BZ_VERSION  "1.0.2, 30-Dec-2001"
+#endif
 
 typedef char            Char;
 typedef unsigned char   Bool;
 typedef unsigned char   UChar;
-typedef int             Int32;
-typedef unsigned int    UInt32;
+#ifdef __ORCAC__
+   typedef long            Int32;
+   typedef unsigned long   UInt32;
+#  define Int32_FMT "%ld"
+#  define UInt32_HEX8FMT "0x%8lx"
+#  define UInt32_HEXFMT "0x%lx"
+#  define Int32_6FMT "%6ld"
+#else
+   typedef int             Int32;
+   typedef unsigned int    UInt32;
+#  define Int32_FMT "%d"
+#  define UInt32_HEX8FMT "0x%8x"
+#  define UInt32_HEXFMT "0x%x"
+#  define Int32_6FMT "%6d"
+#endif /* defined __ORCAC__ */
 typedef short           Int16;
 typedef unsigned short  UInt16;
 
@@ -162,7 +181,11 @@ extern void bz_internal_error ( int errcode );
 
 /*-- Stuff for randomising repetitive blocks. --*/
 
+#ifdef __ORCAC__
+extern Int16 BZ2_rNums[512];
+#else
 extern Int32 BZ2_rNums[512];
+#endif
 
 #define BZ_RAND_DECLS                          \
    Int32 rNToGo;                               \

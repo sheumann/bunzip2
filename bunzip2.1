@@ -1,0 +1,362 @@
+.TH BUNZIP2 1 "9 June 2003"
+.SH NAME
+bunzip2 \- a block-sorting file decompressor, v1.0.2gs1
+.br
+bzcat \- decompresses files to stdout
+.br
+bzip2recover \- recovers data from damaged bzip2 files
+
+.SH SYNOPSIS
+.br
+.B bunzip2
+.RB [ " \-fkvsVL " ]
+[ 
+.I "filenames \&..."
+]
+.br
+.B bzcat
+.RB [ " \-s " ]
+[ 
+.I "filenames \&..."
+]
+.br
+.B bzip2recover
+.I "filename"
+
+.SH DESCRIPTION
+.I bunzip2
+decompresses files created by
+.I bzip2
+using the Burrows-Wheeler block sorting
+text compression algorithm, and Huffman coding.
+.I bzip2
+generally achieves
+considerably better compression than that achieved by more conventional
+LZ77/LZ78-based compressors, and approaches the performance of the PPM
+family of statistical compressors.
+.LP
+The command-line options are deliberately very similar to 
+those of 
+.I GNU
+.I gunzip, 
+but they are not identical.
+.LP
+.I bunzip2
+will by default not overwrite existing
+files.  If you want this to happen, specify the \-f flag.
+.LP
+.I bunzip2 
+decompresses all specified files.  Files which were not created by 
+.I bzip2
+will be detected and ignored, and a warning issued.  
+.I bunzip2
+attempts to guess the filename for the decompressed file 
+from that of the compressed file as follows:
+.LP
+.nf
+       filename.bz2    becomes   filename
+       filename.bz     becomes   filename
+       filename.tbz2   becomes   filename.tar
+       filename.tbz    becomes   filename.tar
+       anyothername    becomes   anyothername.out
+.fi
+.LP
+If the file does not end in one of the recognised endings, 
+.I .bz2, 
+.I .bz, 
+.I .tbz2
+or
+.I .tbz, 
+.I bunzip2 
+complains that it cannot
+guess the name of the original file, and uses the original name
+with
+.I .out
+appended.
+.LP
+Supplying no filenames causes decompression from 
+standard input to standard output.
+.LP  
+File name handling is
+naive in the sense that there is no mechanism for preserving original
+file names, permissions, ownerships or dates in operating systems or
+filesystems which lack these concepts, or have serious file name length
+restrictions, such as MS-DOS or GS/OS.
+.LP
+.I bunzip2 
+will correctly decompress a file which is the
+concatenation of two or more compressed files.  The result is the
+concatenation of the corresponding uncompressed files.  Integrity
+testing (\-t) 
+of concatenated 
+compressed files is also supported.
+.LP
+You can also decompress files to the standard output by
+giving the \-c flag.  Multiple files may be
+decompressed like this.  The resulting outputs are fed sequentially to stdout.
+.LP
+.I bzcat
+(or
+.I bunzip2
+.I \-c) 
+decompresses all specified files to
+the standard output.
+.LP
+.I bunzip2
+will read arguments from the environment variables
+.I BZIP2
+and
+.I BZIP,
+in that order, and will process them
+before any arguments read from the command line.  This gives a 
+convenient way to supply default arguments.
+.LP
+As a self-check for your protection, 
+.I bzip2
+and
+.I bunzip2
+use 32-bit CRCs to
+make sure that the decompressed version of a file is identical to the
+original.  This guards against corruption of the compressed data, and
+against undetected bugs in
+.I bzip2
+and
+.I bunzip2
+(hopefully very unlikely).  The
+chances of data corruption going undetected are microscopic, about one
+chance in four billion for each file processed.  Be aware, though, that
+the check occurs upon decompression, so it can only tell you that
+something is wrong.  It can't help you 
+recover the original uncompressed
+data.  You can use 
+.I bzip2recover
+to try to recover data from
+damaged files.
+.LP
+This manual page pertains to version 1.0.2gs1 of
+.I bunzip2.
+It is fully campatible with compressed data created with all of the previous
+public releases of bzip2, versions
+0.1pl2, 0.9.0, 0.9.5, 1.0.0 and 1.0.1, as well as version 1.0.2.
+.LP
+Return values: 0 for a normal exit, 1 for environmental problems (file
+not found, invalid flags, I/O errors, &c), 2 to indicate a corrupt
+compressed file, 3 for an internal consistency error (eg, bug) which
+caused
+.I bunzip2
+to panic.
+.LP
+.SH OPTIONS
+.IP "\fB\-c\fP \fB\--stdout\fP"
+Decompress to standard output.
+
+.IP "\fB\-d\fP \fB\--decompress\fP"
+Force decompression.  This flag is unnecessary on bunzip2 for GNO,
+since it always decompresses.
+
+.IP "\fB\-t\fP \fB\--test\fP"
+Check integrity of the specified file(s), but don't decompress them.
+This really performs a trial decompression and throws away the result.
+
+.IP "\fB\-f\fP \fB\--force\fP"
+Force overwrite of output files.  Normally,
+.I bunzip2 
+will not overwrite
+existing output files.
+.sp
+.I bunzip2
+normally declines to decompress files which don't have the
+correct magic header bytes.  If forced (-f), however, it will pass
+such files through unmodified.  This is how GNU gzip behaves.
+
+.IP "\fB\-k\fP \fB\--keep\fP"
+Keep (don't delete) input files during decompression.
+
+.IP "\fB\-s\fP \fB\--small\fP"
+Reduce memory usage, for decompression and testing.  Files
+are decompressed and tested using a modified algorithm which only
+requires 2.5 bytes per block byte.  This means any file can be
+decompressed in 2300k of memory, albeit at about half the normal speed.
+.sp
+In short, if your machine is low on memory (5 megabytes or
+less), you will probably need to use \-s.  See MEMORY MANAGEMENT below.
+
+.IP "\fB\-q\fP \fB\--quiet\fP"
+Suppress non-essential warning messages.  Messages pertaining to
+I/O errors and other critical events will not be suppressed.
+
+.IP "\fB\-v\fP \fB\--verbose\fP"
+Verbose mode -- show the compression ratio for each file processed.
+Further \-v's increase the verbosity level, spewing out lots of
+information which is primarily of interest for diagnostic purposes.
+
+.IP "\fB\-L\fP \fB\--license\fP \fB\-V\fP \fB\--version\fP"
+Display the software version, license terms and conditions.
+
+.IP "\fB\--\fP"
+Treats all subsequent arguments as file names, even if they start
+with a dash.  This is so you can handle files with names beginning
+with a dash, for example: bunzip2 \-- \-myfilename.
+.LP
+.SH MEMORY MANAGEMENT
+.I bzip2 
+compresses large files in blocks.  The block size affects
+both the compression ratio achieved, and the amount of memory needed for
+compression and decompression.  The block size can be specified
+to be 100,000 bytes through 900,000 bytes (the
+default).  At decompression time, the block size used for
+compression is read from the header of the compressed file, and
+.I bunzip2
+then allocates itself just enough memory to decompress
+the file.
+.LP
+Decompression requirements, in bytes, can be estimated as:
+.LP
+.nf
+       100k + ( 4 x block size ), or
+       100k + ( 2.5 x block size ) if using \-s
+.fi
+.LP
+For files compressed with the default 900k block size,
+.I bunzip2
+will require about 3700 kbytes to decompress.  To support decompression
+of any file on a 4 megabyte machine, 
+.I bunzip2
+has an option to
+decompress using approximately half this amount of memory, about 2300
+kbytes.  Decompression speed is also halved, so you should use this
+option only where necessary.  The relevant flag is -s.
+.LP
+Decompression speeds are virtually unaffected by block size.
+.LP
+Another significant point applies to files which fit in a single block
+-- that means most files you'd encounter using a large block size.  The
+amount of real memory touched is proportional to the size of the file,
+since the file is smaller than a block.  For example, compressing a file
+20,000 bytes long with a 900k block size will cause the decompressor to
+allocate 3700k but only touch 100k + 20000 * 4 = 180 kbytes
+when decompressing it.
+.LP
+Here is a table which summarises the maximum memory usage for different
+block sizes.  Also recorded is the total compressed size for 14 files of
+the Calgary Text Compression Corpus totalling 3,141,622 bytes.  This
+column gives some feel for how compression varies with block size.
+These figures tend to understate the advantage of larger block sizes for
+larger files, since the Corpus is dominated by smaller files.
+.LP
+.nf
+    Block   Decompress   Decompress   Corpus
+    Size      usage       -s usage     Size
+.fi
+.LP
+.nf
+    100k       500k         350k      914704
+    200k       900k         600k      877703
+    300k      1300k         850k      860338
+    400k      1700k        1100k      846899
+    500k      2100k        1350k      845160
+    600k      2500k        1600k      838626
+    700k      2900k        1850k      834096
+    800k      3300k        2100k      828642
+    900k      3700k        2350k      828642
+.fi
+.LP
+.SH RECOVERING DATA FROM DAMAGED FILES
+.I bzip2
+compresses files in blocks, usually 900kbytes long.  Each
+block is handled independently.  If a media or transmission error causes
+a multi-block .bz2
+file to become damaged, it may be possible to
+recover data from the undamaged blocks in the file.
+.LP
+The compressed representation of each block is delimited by a 48-bit
+pattern, which makes it possible to find the block boundaries with
+reasonable certainty.  Each block also carries its own 32-bit CRC, so
+damaged blocks can be distinguished from undamaged ones.
+.LP
+.I bzip2recover
+is a simple program whose purpose is to search for blocks in .bz2 files,
+and write each block out into its own .bz2 file.  You can then use
+.I bunzip2 
+\-t
+to test the
+integrity of the resulting files, and decompress those which are
+undamaged.
+.LP
+.I bzip2recover
+takes a single argument, the name of the damaged file, 
+and writes a number of files named "rec0001file.bz2",
+"rec0002file.bz2", etc, containing the  extracted  blocks.
+The  output  filenames  are  designed  so  that the use of
+wildcards in subsequent processing -- for example,  
+"bunzip2 -c  rec*file.bz2 > recovered_data" -- processes the files in
+the correct order.
+.LP
+.I bzip2recover
+should be of most use dealing with large .bz2
+files,  as  these will contain many blocks.  It is clearly
+futile to use it on damaged single-block  files,  since  a
+damaged  block  cannot  be recovered.  If you wish to minimise 
+any potential data loss through media  or  transmission errors, 
+you might consider compressing with a smaller
+block size.
+.LP
+.SH PERFORMANCE NOTES
+.I bunzip2
+usually allocates several megabytes of memory to operate
+in, and then charges all over it in a fairly random fashion.  This means
+that performance is largely determined by the speed at which your machine can
+access main memory or (if you have a caching accelerator) serve cache misses.
+Because of this, small changes to the code to reduce the miss rate have
+been observed to give disproportionately large performance improvements.
+I imagine that
+.I bunzip2
+will perform best on machines with very large caches.
+.LP
+.SH CAVEATS
+I/O error messages are not as helpful as they could be.
+.I bunzip2
+tries hard to detect I/O errors and exit cleanly, but the details of
+what the problem is sometimes seem rather misleading.
+.LP
+.I bzip2recover
+for GNO uses 32-bit integers to represent bit positions in compressed files,
+so it cannot handle compressed files more than 512 megabytes long.
+.LP
+
+.SH AUTHOR
+Julian Seward, jseward@acm.org.
+.LP
+http://sources.redhat.com/bzip2
+.LP
+The ideas embodied in
+.I bzip2
+are due to (at least) the following
+people: Michael Burrows and David Wheeler (for the block sorting
+transformation), David Wheeler (again, for the Huffman coder), Peter
+Fenwick (for the structured coding model in the original
+.I bzip,
+and many refinements), and Alistair Moffat, Radford Neal and Ian Witten
+(for the arithmetic coder in the original
+.I bzip).  
+I am much
+indebted for their help, support and advice.  See the manual in the
+source distribution for pointers to sources of documentation.  Christian
+von Roques encouraged me to look for faster sorting algorithms, so as to
+speed up compression.  Bela Lubkin encouraged me to improve the
+worst-case compression performance.  Many people sent patches, helped
+with portability problems, lent machines, gave advice and were generally
+helpful.
+.LP
+This version of
+.I bunzip2
+for GNO has been ported by Stephen Heumann <sheumann@myrealbox.com> from
+Julian Seward's
+.I bzip2
+version 1.0.2 for other platforms.
+.LP
+This program contains material from the ORCA/C Run-Time Libraries,
+copyright 1987-1996 by Byte Works, Inc.  Used with permission.
+.LP
+It also incorporates a public domain stristr routine by Fred Cole,
+Bob Stout, and Greg Thayer, which was obtained from http://www.snippets.org .

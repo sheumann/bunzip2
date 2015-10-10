@@ -85,6 +85,27 @@ extern "C" {
 #define BZ_OUTBUFF_FULL      (-8)
 #define BZ_CONFIG_ERROR      (-9)
 
+#ifdef __ORCAC__
+typedef 
+   struct {
+      char *next_in;
+      unsigned long avail_in;
+      unsigned long total_in_lo32;
+      unsigned long total_in_hi32;
+
+      char *next_out;
+      unsigned long avail_out;
+      unsigned long total_out_lo32;
+      unsigned long total_out_hi32;
+
+      void *state;
+
+      void *(*bzalloc)(void *,long,long);
+      void (*bzfree)(void *,void *);
+      void *opaque;
+   } 
+   bz_stream;
+#else
 typedef 
    struct {
       char *next_in;
@@ -104,6 +125,7 @@ typedef
       void *opaque;
    } 
    bz_stream;
+#endif
 
 
 #ifndef BZ_IMPORT
@@ -195,12 +217,21 @@ BZ_EXTERN void BZ_API(BZ2_bzReadGetUnused) (
       int*    nUnused 
    );
 
+#ifdef __ORCAC__
+BZ_EXTERN long BZ_API(BZ2_bzRead) ( 
+      int*    bzerror, 
+      BZFILE* b, 
+      void*   buf, 
+      long    len 
+   );
+#else
 BZ_EXTERN int BZ_API(BZ2_bzRead) ( 
       int*    bzerror, 
       BZFILE* b, 
       void*   buf, 
       int     len 
    );
+#endif
 
 BZ_EXTERN BZFILE* BZ_API(BZ2_bzWriteOpen) ( 
       int*  bzerror,      
@@ -210,13 +241,31 @@ BZ_EXTERN BZFILE* BZ_API(BZ2_bzWriteOpen) (
       int   workFactor 
    );
 
+#ifdef __ORCAC__
+BZ_EXTERN void BZ_API(BZ2_bzWrite) ( 
+      int*    bzerror, 
+      BZFILE* b, 
+      void*   buf, 
+      long    len 
+   );
+#else
 BZ_EXTERN void BZ_API(BZ2_bzWrite) ( 
       int*    bzerror, 
       BZFILE* b, 
       void*   buf, 
       int     len 
    );
+#endif
 
+#ifdef __ORCAC__
+BZ_EXTERN void BZ_API(BZ2_bzWriteClose) ( 
+      int*           bzerror, 
+      BZFILE*        b, 
+      int            abandon, 
+      unsigned long* nbytes_in, 
+      unsigned long* nbytes_out 
+   );
+#else
 BZ_EXTERN void BZ_API(BZ2_bzWriteClose) ( 
       int*          bzerror, 
       BZFILE*       b, 
@@ -224,7 +273,19 @@ BZ_EXTERN void BZ_API(BZ2_bzWriteClose) (
       unsigned int* nbytes_in, 
       unsigned int* nbytes_out 
    );
+#endif
 
+#ifdef __ORCAC__
+BZ_EXTERN void BZ_API(BZ2_bzWriteClose64) (
+      int*           bzerror, 
+      BZFILE*        b, 
+      int            abandon, 
+      unsigned long* nbytes_in_lo32, 
+      unsigned long* nbytes_in_hi32, 
+      unsigned long* nbytes_out_lo32, 
+      unsigned long* nbytes_out_hi32
+   );
+#else
 BZ_EXTERN void BZ_API(BZ2_bzWriteClose64) ( 
       int*          bzerror, 
       BZFILE*       b, 
@@ -235,10 +296,31 @@ BZ_EXTERN void BZ_API(BZ2_bzWriteClose64) (
       unsigned int* nbytes_out_hi32
    );
 #endif
+#endif
 
 
 /*-- Utility functions --*/
 
+#ifdef __ORCAC__
+BZ_EXTERN int BZ_API(BZ2_bzBuffToBuffCompress) ( 
+      char*          dest, 
+      unsigned long* destLen,
+      char*          source, 
+      unsigned long  sourceLen,
+      int            blockSize100k, 
+      int            verbosity, 
+      int            workFactor 
+   );
+
+BZ_EXTERN int BZ_API(BZ2_bzBuffToBuffDecompress) ( 
+      char*          dest, 
+      unsigned long* destLen,
+      char*          source, 
+      unsigned long  sourceLen,
+      int            small, 
+      int            verbosity 
+   );
+#else
 BZ_EXTERN int BZ_API(BZ2_bzBuffToBuffCompress) ( 
       char*         dest, 
       unsigned int* destLen,
@@ -257,6 +339,7 @@ BZ_EXTERN int BZ_API(BZ2_bzBuffToBuffDecompress) (
       int           small, 
       int           verbosity 
    );
+#endif
 
 
 /*--
@@ -273,6 +356,9 @@ BZ_EXTERN const char * BZ_API(BZ2_bzlibVersion) (
       void
    );
 
+/* This stuff is disabled because it may be broken under GNO due to
+   16-bit ints.  It has not been modified to use longs where needed. */
+#ifndef __ORCAC__
 #ifndef BZ_NO_STDIO
 BZ_EXTERN BZFILE * BZ_API(BZ2_bzopen) (
       const char *path,
@@ -309,6 +395,7 @@ BZ_EXTERN const char * BZ_API(BZ2_bzerror) (
       int    *errnum
    );
 #endif
+#endif /* not defined __ORCAC__ */
 
 #ifdef __cplusplus
 }

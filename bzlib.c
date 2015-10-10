@@ -4,6 +4,11 @@
 /*---                                               bzlib.c ---*/
 /*-------------------------------------------------------------*/
 
+/*-- Modified for use under GNO by Stephen Heumann --*/
+#ifdef __ORCAC__
+segment "bzip2";
+#endif
+
 /*--
   This file is a part of bzip2 and/or libbzip2, a program and
   library for lossless, block-sorting data compression.
@@ -85,7 +90,18 @@
 #ifndef BZ_NO_STDIO
 void BZ2_bz__AssertH__fail ( int errcode )
 {
-   fprintf(stderr, 
+   fprintf(stderr,
+#ifdef __GNO__
+      "\n\nbunzip2/libbzip2: internal error number %d.\n"
+      "This is a bug in bunzip2/libbzip2, %s.\n"
+      "If you are experiencing it only in the GNO version of bunzip2,\n"
+      "please report it to me at sheumann@myrealbox.com .  If you can\n"
+      "duplicate it in other versions of bzip2 as well, please report\n"
+      "it to the original author Julian Seward at tjseward@acm.org .\n",
+      "Please make an effort to report this bug; timely and accurate\n"
+      "bug reports eventually lead to higher quality software.  Thanks.\n"
+      "Stephen Heumann and Julian Seward.\n\n",
+#else
       "\n\nbzip2/libbzip2: internal error number %d.\n"
       "This is a bug in bzip2/libbzip2, %s.\n"
       "Please report it to me at: jseward@acm.org.  If this happened\n"
@@ -94,10 +110,15 @@ void BZ2_bz__AssertH__fail ( int errcode )
       "of that program.  Please make an effort to report this bug;\n"
       "timely and accurate bug reports eventually lead to higher\n"
       "quality software.  Thanks.  Julian Seward, 30 December 2001.\n\n",
+#endif
       errcode,
       BZ2_bzlibVersion()
    );
 
+#ifndef __ORCAC__
+/* Don't need this for decompression, since error 1007 is only 
+ * produced in the blocksort routines used for compression.                         
+ */
    if (errcode == 1007) {
    fprintf(stderr,
       "\n*** A special note about internal error number 1007 ***\n"
@@ -125,6 +146,7 @@ void BZ2_bz__AssertH__fail ( int errcode )
       "\n"
    );
    }
+#endif
 
    exit(3);
 }
@@ -135,9 +157,11 @@ void BZ2_bz__AssertH__fail ( int errcode )
 static
 int bz_config_ok ( void )
 {
+#ifndef __ORCAC__
    if (sizeof(int)   != 4) return 0;
    if (sizeof(short) != 2) return 0;
    if (sizeof(char)  != 1) return 0;
+#endif
    return 1;
 }
 
@@ -158,6 +182,7 @@ void default_bzfree ( void* opaque, void* addr )
 
 
 /*---------------------------------------------------*/
+#ifndef __ORCAC__
 static
 void prepare_new_block ( EState* s )
 {
@@ -169,17 +194,21 @@ void prepare_new_block ( EState* s )
    for (i = 0; i < 256; i++) s->inUse[i] = False;
    s->blockNo++;
 }
+#endif
 
 
 /*---------------------------------------------------*/
+#ifndef __ORCAC__
 static
 void init_RL ( EState* s )
 {
    s->state_in_ch  = 256;
    s->state_in_len = 0;
 }
+#endif
 
 
+#ifndef __ORCAC__
 static
 Bool isempty_RL ( EState* s )
 {
@@ -187,9 +216,11 @@ Bool isempty_RL ( EState* s )
       return False; else
       return True;
 }
+#endif
 
 
 /*---------------------------------------------------*/
+#ifndef __ORCAC__
 int BZ_API(BZ2_bzCompressInit) 
                     ( bz_stream* strm, 
                      int        blockSize100k,
@@ -254,9 +285,11 @@ int BZ_API(BZ2_bzCompressInit)
    prepare_new_block ( s );
    return BZ_OK;
 }
+#endif
 
 
 /*---------------------------------------------------*/
+#ifndef __ORCAC__
 static
 void add_pair_to_block ( EState* s )
 {
@@ -267,6 +300,29 @@ void add_pair_to_block ( EState* s )
    }
    s->inUse[s->state_in_ch] = True;
    switch (s->state_in_len) {
+#ifdef __ORCAC__
+      case 1:
+         *((s->block)+(s->nblock)) = (UChar)ch; s->nblock++;
+         break;
+      case 2:
+         *((s->block)+(s->nblock)) = (UChar)ch; s->nblock++;
+         *((s->block)+(s->nblock)) = (UChar)ch; s->nblock++;
+         break;
+      case 3:
+         *((s->block)+(s->nblock)) = (UChar)ch; s->nblock++;
+         *((s->block)+(s->nblock)) = (UChar)ch; s->nblock++;
+         *((s->block)+(s->nblock)) = (UChar)ch; s->nblock++;
+         break;
+      default:
+         *((s->inUse)+(s->state_in_len-4)) = True;
+         *((s->block)+(s->nblock)) = (UChar)ch; s->nblock++;
+         *((s->block)+(s->nblock)) = (UChar)ch; s->nblock++;
+         *((s->block)+(s->nblock)) = (UChar)ch; s->nblock++;
+         *((s->block)+(s->nblock)) = (UChar)ch; s->nblock++;
+         *((s->block)+(s->nblock)) = ((UChar)(s->state_in_len-4));
+         s->nblock++;
+         break;
+#else
       case 1:
          s->block[s->nblock] = (UChar)ch; s->nblock++;
          break;
@@ -288,20 +344,51 @@ void add_pair_to_block ( EState* s )
          s->block[s->nblock] = ((UChar)(s->state_in_len-4));
          s->nblock++;
          break;
+#endif
    }
 }
+#endif
 
 
 /*---------------------------------------------------*/
+#ifndef __ORCAC__
 static
 void flush_RL ( EState* s )
 {
    if (s->state_in_ch < 256) add_pair_to_block ( s );
    init_RL ( s );
 }
+#endif
 
 
 /*---------------------------------------------------*/
+#ifdef __ORCAC__
+#define ADD_CHAR_TO_BLOCK(zs,zchh0)               \
+{                                                 \
+   UInt32 zchh = (UInt32)(zchh0);                 \
+   /*-- fast track the common case --*/           \
+   if (zchh != zs->state_in_ch &&                 \
+       zs->state_in_len == 1) {                   \
+      UChar ch = (UChar)(zs->state_in_ch);        \
+      BZ_UPDATE_CRC( zs->blockCRC, ch );          \
+	  *((zs->inUse)+(zs->state_in_ch)) = True;    \
+      *((zs->block)+(zs->nblock)) = (UChar)ch;    \
+      zs->nblock++;                               \
+      zs->state_in_ch = zchh;                     \
+   }                                              \
+   else                                           \
+   /*-- general, uncommon cases --*/              \
+   if (zchh != zs->state_in_ch ||                 \
+      zs->state_in_len == 255) {                  \
+      if (zs->state_in_ch < 256)                  \
+         add_pair_to_block ( zs );                \
+      zs->state_in_ch = zchh;                     \
+      zs->state_in_len = 1;                       \
+   } else {                                       \
+      zs->state_in_len++;                         \
+   }                                              \
+}
+#else
 #define ADD_CHAR_TO_BLOCK(zs,zchh0)               \
 {                                                 \
    UInt32 zchh = (UInt32)(zchh0);                 \
@@ -327,9 +414,11 @@ void flush_RL ( EState* s )
       zs->state_in_len++;                         \
    }                                              \
 }
+#endif
 
 
 /*---------------------------------------------------*/
+#ifndef __ORCAC__
 static
 Bool copy_input_until_stop ( EState* s )
 {
@@ -372,9 +461,11 @@ Bool copy_input_until_stop ( EState* s )
    }
    return progress_in;
 }
+#endif
 
 
 /*---------------------------------------------------*/
+#ifndef __ORCAC__
 static
 Bool copy_output_until_stop ( EState* s )
 {
@@ -399,9 +490,11 @@ Bool copy_output_until_stop ( EState* s )
 
    return progress_out;
 }
+#endif
 
 
 /*---------------------------------------------------*/
+#ifndef __ORCAC__
 static
 Bool handle_compress ( bz_stream* strm )
 {
@@ -446,9 +539,11 @@ Bool handle_compress ( bz_stream* strm )
 
    return progress_in || progress_out;
 }
+#endif
 
 
 /*---------------------------------------------------*/
+#ifndef __ORCAC__
 int BZ_API(BZ2_bzCompress) ( bz_stream *strm, int action )
 {
    Bool progress;
@@ -507,9 +602,11 @@ int BZ_API(BZ2_bzCompress) ( bz_stream *strm, int action )
    }
    return BZ_OK; /*--not reached--*/
 }
+#endif
 
 
 /*---------------------------------------------------*/
+#ifndef __ORCAC__
 int BZ_API(BZ2_bzCompressEnd)  ( bz_stream *strm )
 {
    EState* s;
@@ -527,6 +624,7 @@ int BZ_API(BZ2_bzCompressEnd)  ( bz_stream *strm )
 
    return BZ_OK;
 }
+#endif
 
 
 /*---------------------------------------------------*/
@@ -636,12 +734,20 @@ void unRLE_obuf_to_output_FAST ( DState* s )
       UInt32*       c_tt                 = s->tt;
       UInt32        c_tPos               = s->tPos;
       char*         cs_next_out          = s->strm->next_out;
+#ifdef __ORCAC__
+      unsigned long cs_avail_out         = s->strm->avail_out;
+#else
       unsigned int  cs_avail_out         = s->strm->avail_out;
+#endif
       /* end restore */
 
       UInt32       avail_out_INIT = cs_avail_out;
       Int32        s_save_nblockPP = s->save_nblock+1;
+#ifdef __ORCAC__
+      unsigned long total_out_lo32_old;
+#else
       unsigned int total_out_lo32_old;
+#endif
 
       while (True) {
 
@@ -845,7 +951,7 @@ int BZ_API(BZ2_bzDecompress) ( bz_stream *strm )
          if (s->nblock_used == s->save_nblock+1 && s->state_out_len == 0) {
             BZ_FINALISE_CRC ( s->calculatedBlockCRC );
             if (s->verbosity >= 3) 
-               VPrintf2 ( " {0x%x, 0x%x}", s->storedBlockCRC, 
+               VPrintf2 ( " {" UInt32_HEXFMT ", " UInt32_HEXFMT "}", s->storedBlockCRC, 
                           s->calculatedBlockCRC );
             if (s->verbosity >= 2) VPrintf0 ( "]" );
             if (s->calculatedBlockCRC != s->storedBlockCRC)
@@ -863,7 +969,7 @@ int BZ_API(BZ2_bzDecompress) ( bz_stream *strm )
          Int32 r = BZ2_decompress ( s );
          if (r == BZ_STREAM_END) {
             if (s->verbosity >= 3)
-               VPrintf2 ( "\n    combined CRCs: stored = 0x%x, computed = 0x%x", 
+               VPrintf2 ( "\n    combined CRCs: stored = " UInt32_HEXFMT ", computed = " UInt32_HEXFMT, 
                           s->storedCombinedCRC, s->calculatedCombinedCRC );
             if (s->calculatedCombinedCRC != s->storedCombinedCRC)
                return BZ_DATA_ERROR;
@@ -934,6 +1040,7 @@ static Bool myfeof ( FILE* f )
 
 
 /*---------------------------------------------------*/
+#ifndef __ORCAC__
 BZFILE* BZ_API(BZ2_bzWriteOpen) 
                     ( int*  bzerror,      
                       FILE* f, 
@@ -978,15 +1085,21 @@ BZFILE* BZ_API(BZ2_bzWriteOpen)
    bzf->initialisedOk = True;
    return bzf;   
 }
+#endif
 
 
 
 /*---------------------------------------------------*/
+#ifndef __ORCAC__
 void BZ_API(BZ2_bzWrite)
              ( int*    bzerror, 
                BZFILE* b, 
-               void*   buf, 
+               void*   buf,
+#ifdef __ORCAC__
+               long    len )
+#else
                int     len )
+#endif
 {
    Int32 n, n2, ret;
    bzFile* bzf = (bzFile*)b;
@@ -1024,29 +1137,45 @@ void BZ_API(BZ2_bzWrite)
          { BZ_SETERR(BZ_OK); return; };
    }
 }
+#endif
 
 
 /*---------------------------------------------------*/
+#ifndef __ORCAC__
 void BZ_API(BZ2_bzWriteClose)
                   ( int*          bzerror, 
                     BZFILE*       b, 
                     int           abandon,
+#ifdef __ORCAC__
+                    unsigned long* nbytes_in,
+                    unsigned long* nbytes_out )
+#else
                     unsigned int* nbytes_in,
                     unsigned int* nbytes_out )
+#endif
 {
    BZ2_bzWriteClose64 ( bzerror, b, abandon, 
                         nbytes_in, NULL, nbytes_out, NULL );
 }
+#endif
 
 
+#ifndef __ORCAC__
 void BZ_API(BZ2_bzWriteClose64)
                   ( int*          bzerror, 
                     BZFILE*       b, 
                     int           abandon,
+#ifdef __ORCAC__
+                    unsigned long* nbytes_in_lo32,
+                    unsigned long* nbytes_in_hi32,
+                    unsigned long* nbytes_out_lo32,
+                    unsigned long* nbytes_out_hi32 )
+#else
                     unsigned int* nbytes_in_lo32,
                     unsigned int* nbytes_in_hi32,
                     unsigned int* nbytes_out_lo32,
                     unsigned int* nbytes_out_hi32 )
+#endif
 {
    Int32   n, n2, ret;
    bzFile* bzf = (bzFile*)b;
@@ -1102,6 +1231,7 @@ void BZ_API(BZ2_bzWriteClose64)
    BZ2_bzCompressEnd ( &(bzf->strm) );
    free ( bzf );
 }
+#endif
 
 
 /*---------------------------------------------------*/
@@ -1179,11 +1309,19 @@ void BZ_API(BZ2_bzReadClose) ( int *bzerror, BZFILE *b )
 
 
 /*---------------------------------------------------*/
+#ifdef __ORCAC__
+long BZ_API(BZ2_bzRead)
+#else
 int BZ_API(BZ2_bzRead) 
+#endif
            ( int*    bzerror, 
              BZFILE* b, 
-             void*   buf, 
+             void*   buf,
+#ifdef __ORCAC__
+             long    len )
+#else
              int     len )
+#endif
 {
    Int32   n, ret;
    bzFile* bzf = (bzFile*)b;
@@ -1265,11 +1403,20 @@ void BZ_API(BZ2_bzReadGetUnused)
 /*---------------------------------------------------*/
 
 /*---------------------------------------------------*/
+#ifndef __ORCAC__
 int BZ_API(BZ2_bzBuffToBuffCompress) 
-                         ( char*         dest, 
+                         ( char*         dest,
+#ifdef __ORCAC__
+                           unsigned long* destLen,
+#else
                            unsigned int* destLen,
+#endif
                            char*         source, 
+#ifdef __ORCAC__
+                           unsigned long sourceLen,
+#else
                            unsigned int  sourceLen,
+#endif
                            int           blockSize100k, 
                            int           verbosity, 
                            int           workFactor )
@@ -1314,14 +1461,23 @@ int BZ_API(BZ2_bzBuffToBuffCompress)
    BZ2_bzCompressEnd ( &strm );
    return ret;
 }
+#endif
 
 
 /*---------------------------------------------------*/
 int BZ_API(BZ2_bzBuffToBuffDecompress) 
                            ( char*         dest, 
+#ifdef __ORCAC__
+                             unsigned long* destLen,
+#else
                              unsigned int* destLen,
+#endif
                              char*         source, 
+#ifdef __ORCAC__
+                             unsigned long sourceLen,
+#else
                              unsigned int  sourceLen,
+#endif
                              int           small,
                              int           verbosity )
 {
@@ -1390,7 +1546,9 @@ const char * BZ_API(BZ2_bzlibVersion)(void)
    return BZ_VERSION;
 }
 
-
+/* This stuff is disabled because it may be broken under GNO due to
+   16-bit ints.  It has not been modified to use longs where needed. */
+#ifndef __ORCAC__
 #ifndef BZ_NO_STDIO
 /*---------------------------------------------------*/
 
@@ -1586,6 +1744,7 @@ const char * BZ_API(BZ2_bzerror) (BZFILE *b, int *errnum)
    return bzerrorstrings[err*-1];
 }
 #endif
+#endif /* not defined __ORCAC__ */
 
 
 /*-------------------------------------------------------------*/

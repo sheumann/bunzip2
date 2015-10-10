@@ -1,0 +1,10 @@
+
+If all went well, bunzip2 (and bzip2recover) should
+now be installed under your /usr/local hierarchy.
+
+Put the following line in your gshrc file so you can use bzcat:
+   alias bzcat "bunzip2 -c"
+
+Instructions for use are in the man page for bunzip2.  Type
+   man bunzip2
+to read it.

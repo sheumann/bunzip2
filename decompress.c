@@ -4,6 +4,11 @@
 /*---                                          decompress.c ---*/
 /*-------------------------------------------------------------*/
 
+/*-- Modified for use under GNO by Stephen Heumann --*/
+#ifdef __ORCAC__
+segment "decompress", dynamic;
+#endif
+
 /*--
   This file is a part of bzip2 and/or libbzip2, a program and
   library for lossless, block-sorting data compression.
@@ -80,6 +85,36 @@ void makeMaps_d ( DState* s )
 #define RETURN(rrr)                               \
    { retVal = rrr; goto save_state_and_return; };
 
+#ifdef __ORCAC__
+void getBitsOrcaHack(DState *s) {
+      s->bsBuff                                   \
+         = (s->bsBuff << 8) |                     \
+           ((UInt32)                              \
+              (*((UChar*)(s->strm->next_in))));   \
+      s->bsLive += 8;                             \
+      s->strm->next_in++;                         \
+      s->strm->avail_in--;                        \
+      s->strm->total_in_lo32++;                   \
+      if (s->strm->total_in_lo32 == 0)            \
+         s->strm->total_in_hi32++;                \
+   }
+   
+#define GET_BITS(lll,vvv,nnn)                     \
+   case lll: s->state = lll;                      \
+   while (True) {                                 \
+      if (s->bsLive >= nnn) {                     \
+         UInt32 v;                                \
+         v = (s->bsBuff >>                        \
+             (s->bsLive-nnn)) & ((1 << nnn)-1);   \
+         s->bsLive -= nnn;                        \
+         vvv = v;                                 \
+         break;                                   \
+      }                                           \
+      if (s->strm->avail_in == 0) RETURN(BZ_OK);  \
+      getBitsOrcaHack(s);                         \
+   }
+   
+#else
 #define GET_BITS(lll,vvv,nnn)                     \
    case lll: s->state = lll;                      \
    while (True) {                                 \
@@ -103,6 +138,7 @@ void makeMaps_d ( DState* s )
       if (s->strm->total_in_lo32 == 0)            \
          s->strm->total_in_hi32++;                \
    }
+#endif
 
 #define GET_UCHAR(lll,uuu)                        \
    GET_BITS(lll,uuu,8)
@@ -140,7 +176,6 @@ void makeMaps_d ( DState* s )
       RETURN(BZ_DATA_ERROR);                      \
    lval = gPerm[zvec - gBase[zn]];                \
 }
-
 
 /*---------------------------------------------------*/
 Int32 BZ2_decompress ( DState* s )
@@ -276,7 +311,7 @@ Int32 BZ2_decompress ( DState* s )
 
       s->currBlockNo++;
       if (s->verbosity >= 2)
-         VPrintf1 ( "\n    [%d: huff+mtf ", s->currBlockNo );
+         VPrintf1 ( "\n    [" Int32_FMT ": huff+mtf ", s->currBlockNo );
  
       s->storedBlockCRC = 0;
       GET_UCHAR(BZ_X_BCRC_1, uc);
@@ -341,8 +376,13 @@ Int32 BZ2_decompress ( DState* s )
 
       /*--- Undo the MTF values for the selectors. ---*/
       {
+#ifdef __ORCAC__
+         UChar pos[BZ_N_GROUPS] = { 0, 1, 2, 3, 4, 5 };
+         UChar tmp, v;
+#else
          UChar pos[BZ_N_GROUPS], tmp, v;
          for (v = 0; v < nGroups; v++) pos[v] = v;
+#endif
    
          for (i = 0; i < nSelectors; i++) {
             v = s->selectorMtf[i];
@@ -435,14 +475,22 @@ Int32 BZ2_decompress ( DState* s )
             if (s->smallDecompress)
                while (es > 0) {
                   if (nblock >= nblockMAX) RETURN(BZ_DATA_ERROR);
+#ifdef __ORCAC__
+                  *((UInt16 *)(s->ll16)+nblock) = (UInt16)uc;
+#else
                   s->ll16[nblock] = (UInt16)uc;
+#endif
                   nblock++;
                   es--;
                }
             else
                while (es > 0) {
                   if (nblock >= nblockMAX) RETURN(BZ_DATA_ERROR);
+#ifdef __ORCAC__
+				  *((UInt32 *)(s->tt)+nblock) = (UInt32)uc;
+#else
                   s->tt[nblock] = (UInt32)uc;
+#endif
                   nblock++;
                   es--;
                };
@@ -509,8 +557,13 @@ Int32 BZ2_decompress ( DState* s )
 
             s->unzftab[s->seqToUnseq[uc]]++;
             if (s->smallDecompress)
+#ifdef __ORCAC__
+			   *((UInt16 *)(s->ll16)+nblock) = (UInt16)(s->seqToUnseq[uc]); else
+			   *((UInt32 *)(s->tt)+nblock)   = (UInt32)(s->seqToUnseq[uc]);
+#else
                s->ll16[nblock] = (UInt16)(s->seqToUnseq[uc]); else
                s->tt[nblock]   = (UInt32)(s->seqToUnseq[uc]);
+#endif
             nblock++;
 
             GET_MTF_VAL(BZ_X_MTF_5, BZ_X_MTF_6, nextSym);
@@ -542,7 +595,11 @@ Int32 BZ2_decompress ( DState* s )
 
          /*-- compute the T vector --*/
          for (i = 0; i < nblock; i++) {
+#ifdef __ORCAC__
+		    uc = (UChar) *((UInt16 *)(s->ll16)+i);
+#else
             uc = (UChar)(s->ll16[i]);
+#endif
             SET_LL(i, s->cftabCopy[uc]);
             s->cftabCopy[uc]++;
          }
@@ -572,12 +629,21 @@ Int32 BZ2_decompress ( DState* s )
 
          /*-- compute the T^(-1) vector --*/
          for (i = 0; i < nblock; i++) {
+#ifdef __ORCAC__
+		    uc = (UChar)((*((UInt32 *)(s->tt)+i)) & 0xff);
+            *((UInt32 *)(s->tt)+(s->cftab[uc])) |= (i << 8);			
+#else
             uc = (UChar)(s->tt[i] & 0xff);
             s->tt[s->cftab[uc]] |= (i << 8);
+#endif
             s->cftab[uc]++;
          }
 
+#ifdef __ORCAC__
+         s->tPos = (*((UInt32 *)(s->tt)+(s->origPtr))) >> 8;
+#else
          s->tPos = s->tt[s->origPtr] >> 8;
+#endif
          s->nblock_used = 0;
          if (s->blockRandomised) {
             BZ_RAND_INIT_MASK;

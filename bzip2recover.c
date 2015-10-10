@@ -4,6 +4,8 @@
 /*---                                      bzip2recover.c ---*/
 /*-----------------------------------------------------------*/
 
+/*-- Modified for use under GNO by Stephen Heumann --*/
+
 /*--
   This program is bzip2recover, a program to attempt data 
   salvage from damaged files created by the accompanying
@@ -56,7 +58,14 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
+#ifdef __appleiigs__
+#include <gsos.h>
+#if defined(__GNO__) && defined(__STACK_CHECK__)
+#include  <gno/gno.h>
+#endif
+#endif
 
 /* This program records bit locations in the file to be recovered.
    That means that if 64-bit ints are not supported, we will not
@@ -75,13 +84,27 @@
    typedef  unsigned __int64  MaybeUInt64;
 #  define MaybeUInt64_FMT "%I64u"
 #else
+#ifdef __ORCAC__
+   typedef  unsigned long  MaybeUInt64;
+#  define MaybeUInt64_FMT "%lu"
+#else
    typedef  unsigned int   MaybeUInt64;
 #  define MaybeUInt64_FMT "%u"
 #endif
 #endif
+#endif
 
-typedef  unsigned int   UInt32;
-typedef  int            Int32;
+#ifdef __ORCAC__
+   typedef  unsigned long  UInt32;
+   typedef  long           Int32;
+#  define Int32_FMT "%ld"
+#  define size_t_FMT "%lu"
+#else
+   typedef  unsigned int   UInt32;
+   typedef  int            Int32;
+#  define Int32_FMT "%d"
+#  define size_t_FMT "%d"
+#endif /* defined __ORCAC__ */
 typedef  unsigned char  UChar;
 typedef  char           Char;
 typedef  unsigned char  Bool;
@@ -143,7 +166,7 @@ void writeError ( void )
 void mallocFail ( Int32 n )
 {
    fprintf ( stderr,
-             "%s: malloc failed on request for %d bytes.\n",
+             "%s: malloc failed on request for " Int32_FMT " bytes.\n",
             progName, n );
    fprintf ( stderr, "%s: warning: output file(s) may be incomplete.\n",
              progName );
@@ -155,7 +178,7 @@ void mallocFail ( Int32 n )
 void tooManyBlocks ( Int32 max_handled_blocks )
 {
    fprintf ( stderr,
-             "%s: `%s' appears to contain more than %d blocks\n",
+             "%s: `%s' appears to contain more than " Int32_FMT " blocks\n",
             progName, inFileName, max_handled_blocks );
    fprintf ( stderr,
              "%s: and cannot be handled.  To fix, increase\n",
@@ -296,8 +319,13 @@ Bool endsInBz2 ( Char* name )
    if (n <= 4) return False;
    return
       (name[n-4] == '.' &&
+#ifdef __GNO__
+       (name[n-3] == 'b' || name[n-3] == 'B') &&
+       (name[n-2] == 'z' || name[n-3] == 'Z') &&
+#else
        name[n-3] == 'b' &&
        name[n-2] == 'z' &&
+#endif
        name[n-1] == '2');
 }
 
@@ -313,6 +341,10 @@ Bool endsInBz2 ( Char* name )
 #  define  BZ_SPLIT_SYM  '/'   /* path splitter on Unix platform */
 #endif
 
+#ifdef __appleiigs__
+#  define  BZ_SPLIT_SYM_GS ':' /* possible path splitter on GS/OS */
+#endif
+
 #define BLOCK_HEADER_HI  0x00003141UL
 #define BLOCK_HEADER_LO  0x59265359UL
 
@@ -323,14 +355,28 @@ Bool endsInBz2 ( Char* name )
    would have an uncompressed size of at least 40GB, so the chances
    are low you'll need to up this.
 */
+/* STH - Values larger than 5369 (actually a bit less than that)
+   are useless when MaybeUInt64 is 32 bits.
+*/
+#ifdef __ORCAC__
+#define BZ_MAX_HANDLED_BLOCKS 5369
+#else
 #define BZ_MAX_HANDLED_BLOCKS 50000
+#endif
 
+#ifndef __ORCAC__ 
 MaybeUInt64 bStart [BZ_MAX_HANDLED_BLOCKS];
 MaybeUInt64 bEnd   [BZ_MAX_HANDLED_BLOCKS];
 MaybeUInt64 rbStart[BZ_MAX_HANDLED_BLOCKS];
 MaybeUInt64 rbEnd  [BZ_MAX_HANDLED_BLOCKS];
+#else /* if defined __GNO__ */
+MaybeUInt64 *bStart;
+MaybeUInt64 *bEnd;
+MaybeUInt64 *rbStart;
+MaybeUInt64 *rbEnd;
+#endif
 
-Int32 main ( Int32 argc, Char** argv )
+int main ( int argc, Char** argv )
 {
    FILE*       inFile;
    FILE*       outFile;
@@ -341,11 +387,19 @@ Int32 main ( Int32 argc, Char** argv )
    UInt32      buffHi, buffLo, blockCRC;
    Char*       p;
 
+#if defined(__GNO__) && defined(__STACK_CHECK__)
+   __REPORT_STACK();
+#endif
+
    strcpy ( progName, argv[0] );
    inFileName[0] = outFileName[0] = 0;
 
-   fprintf ( stderr, 
+   fprintf ( stderr,
+#ifdef __GNO__
+             "bzip2recover 1.0.2gs1: extracts blocks from damaged .bz2 files.\n" );
+#else
              "bzip2recover 1.0.2: extracts blocks from damaged .bz2 files.\n" );
+#endif
 
    if (argc != 2) {
       fprintf ( stderr, "%s: usage is `%s damaged_file_name'.\n",
@@ -358,9 +412,11 @@ Int32 main ( Int32 argc, Char** argv )
          case 4:
             fprintf(stderr, 
                     "\trestrictions on size of recovered file: 512 MB\n");
+#ifndef __ORCAC__
             fprintf(stderr, 
                     "\tto circumvent, recompile with MaybeUInt64 as an\n"
                     "\tunsigned 64-bit int.\n");
+#endif
             break;
          default:
             fprintf(stderr, 
@@ -373,7 +429,7 @@ Int32 main ( Int32 argc, Char** argv )
 
    if (strlen(argv[1]) >= BZ_MAX_FILENAME-20) {
       fprintf ( stderr, 
-                "%s: supplied filename is suspiciously (>= %d chars) long.  Bye!\n",
+                "%s: supplied filename is suspiciously (>= " size_t_FMT " chars) long.  Bye!\n",
                 progName, strlen(argv[1]) );
       exit(1);
    }
@@ -385,6 +441,21 @@ Int32 main ( Int32 argc, Char** argv )
       fprintf ( stderr, "%s: can't read `%s'\n", progName, inFileName );
       exit(1);
    }
+
+/* Allocate big arrays dynamically so we can use small memory model.  These aren't
+   explicitly free()'d anywhere, but exist for the duration of the program. */
+#ifdef __ORCAC__
+   bStart  = malloc(BZ_MAX_HANDLED_BLOCKS * sizeof(MaybeUInt64));
+   bEnd    = malloc(BZ_MAX_HANDLED_BLOCKS * sizeof(MaybeUInt64));
+   rbStart = malloc(BZ_MAX_HANDLED_BLOCKS * sizeof(MaybeUInt64));
+   rbEnd   = malloc(BZ_MAX_HANDLED_BLOCKS * sizeof(MaybeUInt64));
+   
+   if ((bStart == NULL) || (bEnd == NULL) || 
+         (rbStart == NULL) || (rbEnd == NULL)) {
+      fprintf ( stderr, "%s: couldn't allocate enough memory\n", progName );
+      exit(1);
+   }
+#endif
 
    bsIn = bsOpenReadStream ( inFile );
    fprintf ( stderr, "%s: searching for block boundaries ...\n", progName );
@@ -404,7 +475,7 @@ Int32 main ( Int32 argc, Char** argv )
             (bitsRead - bStart[currBlock]) >= 40) {
             bEnd[currBlock] = bitsRead-1;
             if (currBlock > 0)
-               fprintf ( stderr, "   block %d runs from " MaybeUInt64_FMT 
+               fprintf ( stderr, "   block " Int32_FMT " runs from " MaybeUInt64_FMT 
                                  " to " MaybeUInt64_FMT " (incomplete)\n",
                          currBlock,  bStart[currBlock], bEnd[currBlock] );
          } else
@@ -426,7 +497,7 @@ Int32 main ( Int32 argc, Char** argv )
          }
          if (currBlock > 0 &&
 	     (bEnd[currBlock] - bStart[currBlock]) >= 130) {
-            fprintf ( stderr, "   block %d runs from " MaybeUInt64_FMT 
+            fprintf ( stderr, "   block " Int32_FMT " runs from " MaybeUInt64_FMT 
                               " to " MaybeUInt64_FMT "\n",
                       rbCtr+1,  bStart[currBlock], bEnd[currBlock] );
             rbStart[rbCtr] = bStart[currBlock];
@@ -496,26 +567,41 @@ Int32 main ( Int32 argc, Char** argv )
       if (bitsRead == rbStart[wrBlock]) {
          /* Create the output file name, correctly handling leading paths. 
             (31.10.2001 by Sergey E. Kusikov) */
+		 /* Modified by STH to make it work better on GNO.  It would still
+		    be confused by files with a '/' character in their names. */
          Char* split;
          Int32 ofs, k;
          for (k = 0; k < BZ_MAX_FILENAME; k++) 
             outFileName[k] = 0;
          strcpy (outFileName, inFileName);
+#ifdef __appleiigs__
+         split = ((strrchr (outFileName, BZ_SPLIT_SYM_GS) > 
+		          strrchr (outFileName, BZ_SPLIT_SYM)) ?
+				      strrchr (outFileName, BZ_SPLIT_SYM_GS) : 
+					  strrchr (outFileName, BZ_SPLIT_SYM));
+#else
          split = strrchr (outFileName, BZ_SPLIT_SYM);
+#endif /* defined __appleiigs__ */
          if (split == NULL) {
             split = outFileName;
          } else {
             ++split;
 	 }
 	 /* Now split points to the start of the basename. */
-         ofs  = split - outFileName;
+         ofs  = split - outFileName; 
+/* On GS, max. block number is < 6000, and ProDOS filenames are short,
+   so use only four digits in output file name */
+#ifdef __ORCAC__
+         sprintf (split, "rec%4ld", wrBlock+1);
+#else
          sprintf (split, "rec%5d", wrBlock+1);
+#endif
          for (p = split; *p != 0; p++) if (*p == ' ') *p = '0';
          strcat (outFileName, inFileName + ofs);
 
          if ( !endsInBz2(outFileName)) strcat ( outFileName, ".bz2" );
 
-         fprintf ( stderr, "   writing block %d to `%s' ...\n",
+         fprintf ( stderr, "   writing block " Int32_FMT " to `%s' ...\n",
                            wrBlock+1, outFileName );
 
          outFile = fopen ( outFileName, "wb" );
@@ -524,6 +610,27 @@ Int32 main ( Int32 argc, Char** argv )
                       progName, outFileName );
             exit(1);
          }
+
+#ifdef __appleiigs__
+         /* Set filetype to BIN if running on the GS */
+		 {
+		   static GSString255 fileNameStringGS;
+		   static FileInfoRecGS infoRec = { 4, /* pCount */
+		                                    &fileNameStringGS, /* Ptr to file name */
+											0x00C3, /* access restrictions (none) */
+											0x06, /* filetype (BIN) */
+											0x0000 /* auxtype ($0000) */
+											};
+		
+		   if (strlen( outFileName ) <= 255) {
+		      strncpy( fileNameStringGS.text, outFileName, 255 );
+			  fileNameStringGS.length = strlen( outFileName );
+		      SetFileInfo( &infoRec );
+		      /* Ignoring any errors produced by this call */
+		   }
+		 }
+#endif
+
          bsWr = bsOpenWriteStream ( outFile );
          bsPutUChar ( bsWr, BZ_HDR_B );    
          bsPutUChar ( bsWr, BZ_HDR_Z );    
@@ -535,7 +642,7 @@ Int32 main ( Int32 argc, Char** argv )
       }
    }
 
-   fprintf ( stderr, "%s: finished\n", progName );
+   fprintf ( stderr, "%s: finished\n", progName );   
    return 0;
 }
 

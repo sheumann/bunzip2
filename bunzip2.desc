@@ -1,0 +1,13 @@
+Name:    bunzip2
+Version: 1.0.2
+Shell:   GNO/ME
+Author:  Stephen Heumann (GNO port of original code by Julian Seward)
+Contact: sheumann@myrealbox.com
+Where:   /usr/local/bin
+FTP:     ftp.gno.org
+
+   Decompression program for files compressed in the bzip2 format.  Based
+on Julian Seward's bzip2 program, but only supports file decompression and
+testing, not compression.  Can also be used as bzcat, writing decompressed
+data to stdout.  Also includes bzip2recover program for restoring data
+from partially corrupted bzip2 archives.
